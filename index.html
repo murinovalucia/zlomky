@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="sk">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Zlomky na číselnej osi</title>
+<style>
+:root{
+  --text-primary:#1f1f1d;--text-secondary:#5f5e5a;--text-muted:#888780;
+  --text-accent:#185FA5;--text-success:#3B6D11;--text-danger:#A32D2D;
+  --bg-accent:#E6F1FB;--border:rgba(0,0,0,.15);--border-strong:rgba(0,0,0,.3);
+  --border-stronger:rgba(0,0,0,.4);--border-accent:#378ADD;
+  --surface-1:#f4f3ee;--surface-2:#ffffff;--page:#ffffff;--radius:8px;
+}
+@media (prefers-color-scheme:dark){
+  :root{
+    --text-primary:#f1efe8;--text-secondary:#b4b2a9;--text-muted:#888780;
+    --text-accent:#85B7EB;--text-success:#97C459;--text-danger:#F09595;
+    --bg-accent:#0C447C;--border:rgba(255,255,255,.15);--border-strong:rgba(255,255,255,.3);
+    --border-stronger:rgba(255,255,255,.4);--border-accent:#378ADD;
+    --surface-1:#2c2c2a;--surface-2:#1f1f1d;--page:#1f1f1d;
+  }
+}
+*{box-sizing:border-box}
+body{margin:0;padding:16px;background:var(--page);color:var(--text-primary);font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;font-size:16px;line-height:1.5}
+.app{max-width:720px;margin:0 auto}
+h1{font-size:22px;font-weight:500;margin:0 0 4px}
+button{font:inherit;font-size:15px;background:transparent;color:var(--text-primary);border:1px solid var(--border-strong);border-radius:var(--radius);padding:7px 14px;cursor:pointer}
+button:hover{background:var(--surface-1)}
+button:active{transform:scale(.98)}
+input[type=number]{font:inherit;height:36px;padding:0 8px;background:var(--surface-2);color:var(--text-primary);border:1px solid var(--border-strong);border-radius:var(--radius)}
+</style>
+</head>
+<body>
+<div class="app">
+<h1>Zlomky na číselnej osi</h1>
+<div style="display:flex;flex-wrap:wrap;align-items:center;gap:12px;padding:1rem 0 .5rem;">
+  <button id="mExp">Skúmanie</button>
+  <button id="mTest">Testovanie</button>
+  <span id="score" style="font-size:14px;color:var(--text-secondary);margin-left:auto;"></span>
+</div>
+<div style="display:flex;flex-wrap:wrap;align-items:center;gap:12px 20px;padding:0 0 .75rem;">
+  <label style="display:flex;align-items:center;gap:8px;font-size:14px;color:var(--text-secondary);">Dielikov od 0 po 1
+    <input type="number" id="n" min="1" max="20" step="1" value="5" style="width:76px;">
+  </label>
+  <label style="display:flex;align-items:center;gap:8px;font-size:14px;color:var(--text-secondary);">Najvyššie číslo na osi
+    <input type="number" id="m" min="1" max="5" step="1" value="2" style="width:76px;">
+  </label>
+  <span id="hint" style="font-size:13px;color:var(--text-muted);"></span>
+</div>
+<div id="levels" style="display:none;flex-wrap:wrap;align-items:center;gap:8px;padding:0 0 .75rem;">
+  <span style="font-size:14px;color:var(--text-secondary);margin-right:4px;">Úroveň</span>
+  <button id="lEasy">Ľahká</button>
+  <button id="lMed">Stredná</button>
+  <button id="lHard">Ťažká</button>
+</div>
+<div id="task" style="display:none;align-items:center;gap:14px;background:var(--bg-accent);color:var(--text-accent);border-radius:var(--radius);padding:10px 14px;font-size:16px;margin-bottom:8px;"></div>
+<svg id="line" viewBox="0 0 680 130" width="100%" tabindex="0" role="slider" aria-label="Posuvník na číselnej osi" style="touch-action:none;cursor:grab;display:block;"></svg>
+<div id="disp" style="display:flex;align-items:center;justify-content:center;gap:28px;flex-wrap:wrap;padding:.5rem 0;">
+  <div style="display:inline-flex;flex-direction:column;align-items:center;font-size:36px;font-weight:500;line-height:1.1;">
+    <span id="num">0</span>
+    <span style="width:100%;height:3px;background:var(--text-primary);margin:4px 0;"></span>
+    <span id="den">5</span>
+  </div>
+  <div style="font-size:14px;color:var(--text-secondary);line-height:1.8;">
+    <div id="mixed"></div>
+    <div id="simp"></div>
+    <div id="dec"></div>
+  </div>
+</div>
+<div style="text-align:center;padding:.5rem 0;"><button id="check" style="display:none;">Skontrolovať</button></div>
+<div id="fb" aria-live="polite" style="min-height:24px;font-size:15px;text-align:center;"></div>
+</div>
+<script>
+var X0=40,X1=640,Y=60,MAXT=80;
+var n=5,M=2,k=0,target=null,ok=0,tot=0,dragging=false,mode='exp',locked=false,level='easy';
+var svg=document.getElementById('line');
+function gcd(a,b){return b?gcd(b,a%b):a;}
+function dec(v){return (Math.round(v*100)/100).toString().replace('.',',');}
+function T(){return n*M;}
+function ri(a,b){return a+Math.floor(Math.random()*(b-a+1));}
+function pick(arr){return arr[Math.floor(Math.random()*arr.length)];}
+function isFree(){return mode=='test'&&level=='hard';}
+function frac(a,d){return '<span style="display:inline-flex;flex-direction:column;align-items:center;font-size:28px;font-weight:500;line-height:1.1;"><span>'+a+'</span><span style="width:100%;height:2px;background:var(--text-accent);margin:3px 0;"></span><span>'+d+'</span></span>';}
+function draw(){
+  var t=T();
+  var kx=X0+(X1-X0)*k/t;
+  var s='<line x1="'+X0+'" y1="'+Y+'" x2="'+X1+'" y2="'+Y+'" stroke="var(--border-stronger)" stroke-width="4" stroke-linecap="round"/>';
+  s+='<line x1="'+X0+'" y1="'+Y+'" x2="'+kx+'" y2="'+Y+'" stroke="var(--text-accent)" stroke-width="6" stroke-linecap="round"/>';
+  for(var i=0;i<=t;i++){
+    var x=X0+(X1-X0)*i/t;
+    var big=(i%n==0);
+    s+='<line x1="'+x+'" y1="'+(Y-(big?16:10))+'" x2="'+x+'" y2="'+(Y+(big?16:10))+'" stroke="var(--text-primary)" stroke-width="'+(big?3:1.5)+'"/>';
+    if(big)s+='<text x="'+x+'" y="'+(Y+40)+'" text-anchor="middle" font-size="18" font-weight="500" fill="var(--text-primary)">'+(i/n)+'</text>';
+  }
+  s+='<circle cx="'+kx+'" cy="'+Y+'" r="14" fill="var(--text-accent)" stroke="var(--surface-2)" stroke-width="3"/>';
+  s+='<path d="M'+(kx-8)+' '+(Y-34)+' L'+(kx+8)+' '+(Y-34)+' L'+kx+' '+(Y-25)+' Z" fill="var(--text-accent)"/>';
+  svg.innerHTML=s;
+  svg.setAttribute('aria-valuemin','0');svg.setAttribute('aria-valuemax',t);svg.setAttribute('aria-valuenow',Math.round(k*100)/100);
+  if(mode=='exp'){
+    svg.setAttribute('aria-valuetext',k+' z '+n);
+    document.getElementById('num').textContent=k;
+    document.getElementById('den').textContent=n;
+    var g=gcd(k,n),w=Math.floor(k/n),r=k%n;
+    document.getElementById('mixed').textContent=(w>=1&&r>0)?'Zmiešané číslo: '+w+' a '+(r/gcd(r,n))+'/'+(n/gcd(r,n)):(w>=1&&r==0?'Celé číslo: '+w:'');
+    document.getElementById('simp').textContent=(k>0&&g>1&&r>0)?'Základný tvar: '+(k/g)+'/'+(n/g):'';
+    document.getElementById('dec').textContent='Desatinné číslo: '+dec(k/n);
+  }else{
+    svg.setAttribute('aria-valuetext','poloha '+dec(k/n)+' jednotky');
+  }
+}
+function setFromEvent(e){
+  if(locked)return;
+  var t=T();
+  var r=svg.getBoundingClientRect();
+  var vx=(e.clientX-r.left)/r.width*680;
+  var v=(vx-X0)/(X1-X0)*t;
+  if(!isFree())v=Math.round(v);
+  k=Math.max(0,Math.min(t,v));
+  draw();
+}
+svg.addEventListener('pointerdown',function(e){dragging=true;svg.setPointerCapture(e.pointerId);svg.style.cursor='grabbing';setFromEvent(e);});
+svg.addEventListener('pointermove',function(e){if(dragging)setFromEvent(e);});
+svg.addEventListener('pointerup',function(){dragging=false;svg.style.cursor='grab';});
+svg.addEventListener('keydown',function(e){
+  if(locked)return;
+  var st=isFree()?0.25:1;
+  if(e.key=='ArrowRight'||e.key=='ArrowUp'){k=Math.min(T(),k+st);draw();e.preventDefault();}
+  if(e.key=='ArrowLeft'||e.key=='ArrowDown'){k=Math.max(0,k-st);draw();e.preventDefault();}
+});
+function genTask(){
+  var t=T(),a,d,pos,tol=0,opts,i;
+  if(level=='easy'){
+    d=n;a=ri(1,t);pos=a;
+  }else if(level=='med'){
+    opts=[];
+    for(i=2;i<n;i++){if(n%i==0)opts.push(i);}
+    for(i=2;i<=4;i++){if(n*i<=40)opts.push(n*i);}
+    d=pick(opts);
+    if(n%d==0){a=ri(1,M*d);pos=a*n/d;}
+    else{var j=d/n;a=j*ri(1,t);pos=a/j;}
+  }else{
+    opts=[];
+    for(i=2;i<=12;i++){if(i!=n&&n%i!=0&&i%n!=0)opts.push(i);}
+    if(!opts.length){for(i=2;i<=12;i++){if(i!=n)opts.push(i);}}
+    d=pick(opts);
+    for(i=0;i<30;i++){
+      a=ri(1,M*d-1);
+      if(gcd(a,d)==1&&(a*n)%d!=0)break;
+    }
+    pos=a*n/d;tol=1;
+  }
+  return {a:a,d:d,pos:pos,tol:tol};
+}
+function newTask(){
+  locked=false;k=0;
+  target=genTask();
+  document.getElementById('task').innerHTML='<span>Označ posuvníkom hodnotu</span>'+frac(target.a,target.d);
+  document.getElementById('fb').textContent='';
+  draw();
+}
+function styleBtn(id,on){
+  document.getElementById(id).style.cssText=on?'border:2px solid var(--border-accent);color:var(--text-accent);':'';
+}
+function setLevelBtns(){
+  styleBtn('lEasy',level=='easy');styleBtn('lMed',level=='med');styleBtn('lHard',level=='hard');
+}
+function setMode(md){
+  mode=md;
+  var exp=(md=='exp');
+  styleBtn('mExp',exp);styleBtn('mTest',!exp);
+  document.getElementById('task').style.display=exp?'none':'flex';
+  document.getElementById('levels').style.display=exp?'none':'flex';
+  document.getElementById('check').style.display=exp?'none':'inline-block';
+  document.getElementById('disp').style.display=exp?'flex':'none';
+  document.getElementById('score').textContent=exp?'':'Skóre: '+ok+' / '+tot;
+  document.getElementById('fb').textContent='';
+  k=0;locked=false;
+  setLevelBtns();
+  if(exp)draw();else newTask();
+}
+function setLevel(l){
+  level=l;ok=0;tot=0;
+  document.getElementById('score').textContent='Skóre: 0 / 0';
+  setLevelBtns();newTask();
+}
+function readInputs(){
+  var a=parseInt(document.getElementById('n').value,10);
+  var b=parseInt(document.getElementById('m').value,10);
+  if(isNaN(a)||a<1)a=1;
+  if(a>20)a=20;
+  if(isNaN(b)||b<1)b=1;
+  if(b>5)b=5;
+  var hint='';
+  if(a*b>MAXT){b=Math.max(1,Math.floor(MAXT/a));hint='Os by bola príliš hustá, najvyššie číslo som upravil.';}
+  document.getElementById('n').value=a;
+  document.getElementById('m').value=b;
+  document.getElementById('hint').textContent=hint;
+  n=a;M=b;k=0;locked=false;
+  document.getElementById('fb').textContent='';
+  if(mode=='test')newTask();else draw();
+}
+document.getElementById('n').addEventListener('change',readInputs);
+document.getElementById('m').addEventListener('change',readInputs);
+document.getElementById('mExp').addEventListener('click',function(){setMode('exp');});
+document.getElementById('mTest').addEventListener('click',function(){setMode('test');});
+document.getElementById('lEasy').addEventListener('click',function(){setLevel('easy');});
+document.getElementById('lMed').addEventListener('click',function(){setLevel('med');});
+document.getElementById('lHard').addEventListener('click',function(){setLevel('hard');});
+document.getElementById('check').addEventListener('click',function(){
+  if(locked||!target)return;
+  tot++;
+  var fb=document.getElementById('fb');
+  if(Math.abs(k-target.pos)<=target.tol+1e-9){
+    ok++;locked=true;
+    fb.style.color='var(--text-success)';
+    fb.textContent=level=='hard'?'Správne! Si v rámci tolerancie jedného dielika.':'Správne! Posuvník je na správnom mieste.';
+    setTimeout(newTask,1600);
+  }else{
+    fb.style.color='var(--text-danger)';
+    fb.textContent=level=='hard'?'Ešte nie. Skús iné miesto, môžeš sa mýliť najviac o jeden dielik.':'Ešte nie. Skús iný dielik a skontroluj znova.';
+  }
+  document.getElementById('score').textContent='Skóre: '+ok+' / '+tot;
+});
+setMode('exp');
+</script>
+</body>
+</html>
